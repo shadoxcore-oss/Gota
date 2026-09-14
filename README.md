@@ -11,7 +11,7 @@
 قم باستنساخ مستودع Gota:
 
 ```bash
-git clone <REPOSITORY_URL>
+git clone https://github.com/shadoxcore-oss/Gota.git
 ```
 
 ثم انتقل إلى مجلد المشروع:
