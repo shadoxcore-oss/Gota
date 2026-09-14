@@ -25,7 +25,7 @@ cd gota
 قم بإعطاء سكريبت `gota` صلاحية التنفيذ:
 
 ```bash
-chmod +x gota
+chmod +x Gota
 ```
 
 ### 3. تثبيت Gota محليًا
