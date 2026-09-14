@@ -1,0 +1,472 @@
+#!/usr/bin/env bash
+
+# ============================================
+# Gota - Git CLI Tool
+# Version : 1.0
+# Author  : shadox
+# Date    : 14-09-2026
+# ============================================
+
+
+# دالة التوقف
+pause() {
+	read -p "Press ENTER to continue... "
+}
+
+# الدالة إلتقاط معلومات الهوية مستخدم
+WhoYou(){
+	local name
+	local email
+	read -p "Enter USERNAME GIT : " name
+	read -p "Enter Email For GIT : " email
+	git config --global user.name "$name"
+	git config --global user.email "$email"
+
+}
+# الدالة المسؤولة عن عرض معلومات المستخدم | الإسم و الايميل
+Git_Info(){
+    if ! Is_Git_Repository; then
+     echo "You are not inside a Git repository."
+     pause
+     return 1
+    fi
+	local keep
+	echo ""
+	echo "==============  GIT Identity  ================"
+	echo " USER-NAME :  $(git config --global user.name) "
+    echo " USER-EMAIL :  $(git config --global user.email) "
+	echo "============================================="
+	echo ""
+    
+	read -p "IF you want countuin (Click ENTER) : " keep 
+}
+
+
+
+# الدالة المسؤولة عن تحديد إذا كان المكان الحالي عبارة عن مستودع أم لا 
+Is_Git_Repository() {
+    git rev-parse --is-inside-work-tree &>/dev/null
+}
+
+# الدالة المسؤولة عن إنشاء و تهيئة مستودع جديد
+Create_Repository() {
+    local container
+
+    read -p "Enter Repository Name: " container
+
+    if [ -z "$container" ]; then
+        echo "Repository name cannot be empty."
+        pause
+        return 1
+    fi
+
+    git init "$container"
+    pause
+}
+
+
+
+# الدالة المسؤولة عن إضافة التعديلات التي تم اجرائها بالمستودع
+Add_Change() {
+    local comment
+    if ! Is_Git_Repository; then
+    echo "You are not inside a Git repository."
+    return 1
+    fi
+    if [ -z "$(git status --porcelain)" ]; then
+        echo "No changes to commit."
+        return 1
+    fi
+
+    while [ -z "$comment" ]
+    do
+        read -p "Enter Comment or Description : " comment
+
+        if [ -z "$comment" ]; then
+            echo "Commit message cannot be empty!"
+        fi
+    done
+
+    if git add . && git commit -m "$comment"; then
+     echo "Changes committed successfully."
+    else
+     echo "Commit failed."
+     return 1
+    fi
+
+}
+
+# الدالة المسؤولة عن تحديد البرانش الحالي
+Current_Branch() {
+    local branch
+    if ! Is_Git_Repository; then
+    echo "You are not inside a Git repository."
+    return 1
+    fi
+
+
+    branch=$(git branch --show-current)
+
+    if [ -z "$branch" ]; then
+        echo "You are not currently on a branch | Detached HEAD !!! "
+        return 1
+    fi
+
+    echo "Current Branch : $branch"
+    echo ""
+}
+# المصفوفات المشتركة للدوال المتعلقة ببرانش
+
+# الدوال التي تعتمد على هذه المصفوفة | Build_Branch_List
+branches=()
+branch_level=() 
+# يوجد 3 دوال تعتمد على هذه المصفوفة
+selected_branch=()
+
+# الدالة المسؤولة عن عرض قائمة 
+Build_Branch_List() {
+    local branch
+    local sub_branch
+    local i=1
+    # المصفوفات المشتركة
+    branches=()
+    selected_branch=()
+    branch_level=()
+
+    # إضافة جميع برنشات موجودة
+    while IFS= read -r branch
+    do
+        branches+=("$branch")
+    done < <(git branch --format='%(refname:short)' | sort)
+
+    # Build organized branch list
+    # ترتيب البرانشات
+    for branch in "${branches[@]}"
+    do
+    # فحص لبرانشات المتعلقة ببرانش معين
+        if [[ "$branch" == *-* ]]
+        then
+            for sub_branch in "${branches[@]}"
+            do
+                if [[ "$sub_branch" != "$branch" ]] &&
+                   [[ "$branch" == "$sub_branch-"* ]]
+                then
+                    break
+                fi
+            done
+
+            if [[ "$branch" == "$sub_branch-"* ]]
+            then
+                continue
+            fi
+        fi
+
+        # إضافة البرانش الرئيسي
+        selected_branch[$i]="$branch"
+        branch_level[$i]=0
+        ((i++))
+
+        # إيجاد البرانشات الفرعين 
+        for sub_branch in "${branches[@]}"
+        do
+            if [[ "$sub_branch" == "$branch-"* ]]
+            then
+                selected_branch[$i]="$sub_branch"
+                branch_level[$i]=1
+                ((i++))
+            fi
+        done
+    done
+    # الجزء المسؤول عن عرض برانش بشكل مطلوب
+    for i in "${!selected_branch[@]}"
+    do
+        branch="${selected_branch[$i]}"
+
+        if [ "${branch_level[$i]}" -eq 1 ]
+        then
+            printf "    %2d) %s\n" "$i" "$branch"
+        else
+            printf "%2d) %s\n" "$i" "$branch"
+            echo ""
+        fi
+    done
+
+}
+
+# الدالة المسؤولة عن انتقال الى برانش معين
+Switch_Branch() {
+    
+    if ! Is_Git_Repository; then
+    echo "You are not inside a Git repository."
+    return 1
+    fi
+    
+    local choice
+    local branch
+    local i
+
+    echo ""
+    echo "========================================"
+    echo "           Current Branch"
+    echo "========================================"
+    echo ""
+
+    Current_Branch
+
+    echo ""
+    echo "========================================"
+    echo "             Branches"
+    echo "========================================"
+    echo ""
+
+    Build_Branch_List
+
+
+    echo "========================================"
+    echo ""
+
+    read -p "Enter branch number (ENTER to cancel): " choice
+
+    if [ -z "$choice" ]
+    then
+        echo "Operation cancelled."
+        return 0
+    fi
+
+    if ! [[ "$choice" =~ ^[0-9]+$ ]]
+    then
+        echo "Invalid choice."
+        return 1
+    fi
+
+    branch="${selected_branch[$choice]}"
+
+    if [ -z "$branch" ]
+    then
+        echo "Branch number does not exist."
+        return 1
+    fi
+
+    git checkout "$branch"
+}
+
+# الدالة المسؤولة عن حذف برانش معين 
+Delete_Branch() {
+
+    if ! Is_Git_Repository; then
+    echo "You are not inside a Git repository."
+    return 1
+    fi
+
+    local choice
+    local branch
+    local i
+    local confirm
+
+    echo ""
+    echo "========================================"
+    echo "             Delete Branch"
+    echo "========================================"
+    echo ""
+
+    Build_Branch_List
+
+    
+    echo "========================================"
+    echo ""
+
+    read -p "Enter branch number (ENTER to cancel): " choice
+
+    if [ -z "$choice" ]
+    then
+        echo "Operation cancelled."
+        return 0
+    fi
+
+    if ! [[ "$choice" =~ ^[0-9]+$ ]]
+    then
+        echo "Invalid choice."
+        return 1
+    fi
+
+    branch="${selected_branch[$choice]}"
+
+    if [ -z "$branch" ]
+    then
+        echo "Branch number does not exist."
+        return 1
+    fi
+
+    # Prevent deleting the current branch
+    if [ "$branch" = "$(git branch --show-current)" ]
+    then
+        echo "You cannot delete the current branch."
+        return 1
+    fi
+
+    echo ""
+    echo "Selected Branch : $branch"
+    echo ""
+
+    for i in {1..3}
+    do
+        while true
+        do
+            read -p "Are you sure you want to delete '$branch'? (y/n): " confirm
+
+            if [[ "$confirm" == "y" || "$confirm" == "Y" ]]
+            then
+                break
+
+            elif [[ "$confirm" == "n" || "$confirm" == "N" ]]
+            then
+                echo "Operation cancelled."
+                return 0
+    
+            else
+                echo "Please enter y or n."
+            fi
+        done
+    done
+    git branch -D "$branch"
+    
+}
+
+
+# الدالة المسؤوبة عن انشاء برانش من كومت معين 
+Create_Branch_From_Commit() {
+    if ! Is_Git_Repository; then
+        echo "You are not inside a Git repository."
+        return 1
+    fi
+    local choice
+    local commit
+    local branch_name
+
+    echo ""
+    Current_Branch
+    echo ""
+
+    echo "============= Commit History ============="
+
+    git log --oneline | nl -w2 -s') '
+
+    echo "==========================================="
+    echo ""
+
+    read -p "Enter commit number (ENTER to cancel): " choice
+
+    if [ -z "$choice" ]; then
+        echo "Operation cancelled."
+        return 0
+    fi
+
+    if ! [[ "$choice" =~ ^[0-9]+$ ]]; then
+        echo "Invalid choice."
+        return 1
+    fi
+
+    commit=$(git log --format="%H" | sed -n "${choice}p")
+
+    if [ -z "$commit" ]; then
+        echo "Commit number does not exist."
+        return 1
+    fi
+
+    echo ""
+    read -p "Enter new branch name (ENTER to cancel): " branch_name
+
+    if [ -z "$branch_name" ]; then
+        echo "Operation cancelled."
+        return 0
+    fi
+
+    git checkout -b "$branch_name" "$commit"
+}
+
+# الدالة المسؤولة عن عرض قائمة الخيارات
+list_option() {
+	clear
+	local option
+	echo "|========  LIST OPTION Gota(Git)  =======|"
+	echo "| 1 - Creat Repository                   |"
+	echo "| 2 - Git Identity                       |"
+	echo "| 3 - Show Git Information               |"
+	echo "| 4 - Add Change                         |"
+	echo "| 5 - Show Current Branch                |"
+	echo "| 6 - Switch Branch ( cd Branch )        |"
+	echo "| 7 - Create Branch From Commit          |"
+    echo "| 8 - Delete Branch                      |"
+	echo "| 99 - Exit                              |"
+	echo "|========================================|"
+
+	
+    read -p "Enter Your Option : " option
+    while [[ ! "$option" =~ ^[0-9]+$ ]]; do
+        echo "Please Enter numbers..."
+        read -p "Enter Your Option : " option
+    done
+	return "$option"
+}
+
+# الدالة المسؤولة عن معالجة خيارات و تنفيذ العملية المناسبة 
+press_option() {
+	local option=$1
+	case "$option" in
+	  1)
+       Create_Repository
+      ;;
+	  2)
+	   WhoYou
+	  ;;
+	  3)
+	   Git_Info
+	  ;;
+	  4)
+	   Add_Change
+	   pause
+	  ;;
+	  5)
+	   Current_Branch
+	   pause
+	  ;;
+	  6)
+	   Switch_Branch
+	   pause
+	  ;;
+	  7)
+	   Create_Branch_From_Commit
+	   pause
+	  ;;
+      8)
+       Delete_Branch
+       pause
+      ;;
+	  99)
+	   echo "GoodBye <3 !!!"
+      ;;
+      *)
+       echo "Invalid option."
+       pause
+      ;;
+	esac
+}
+
+# الدالة المسؤولة عن تشغيل السكريبت
+main() {
+	while true
+    do
+        list_option
+        option=$?
+
+        if [[ "$option" == "99" ]]; then
+            echo "GoodBye <3 !!! "
+            break
+        fi
+
+        press_option "$option"
+    done
+}
+
+# تشغيل السكريبت
+main
