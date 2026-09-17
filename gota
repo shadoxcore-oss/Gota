@@ -2,9 +2,9 @@
 
 # ============================================
 # Gota - Git CLI Tool
-# Version : 1.0
+# Version : 1.1
 # Author  : shadox
-# Date    : 14-09-2026
+# Date    : 17-09-2026
 # ============================================
 
 
@@ -14,7 +14,7 @@ pause() {
 }
 
 # الدالة إلتقاط معلومات الهوية مستخدم
-WhoYou(){
+Set_Git_Identity(){
 	local name
 	local email
 	read -p "Enter USERNAME GIT : " name
@@ -25,86 +25,123 @@ WhoYou(){
 }
 # الدالة المسؤولة عن عرض معلومات المستخدم | الإسم و الايميل
 Git_Info(){
-    if ! Is_Git_Repository; then
-     echo "You are not inside a Git repository."
-     pause
-     return 1
-    fi
-	local keep
 	echo ""
 	echo "==============  GIT Identity  ================"
 	echo " USER-NAME :  $(git config --global user.name) "
     echo " USER-EMAIL :  $(git config --global user.email) "
 	echo "============================================="
 	echo ""
-    
-	read -p "IF you want countuin (Click ENTER) : " keep 
+
 }
 
-
-
-# الدالة المسؤولة عن تحديد إذا كان المكان الحالي عبارة عن مستودع أم لا 
-Is_Git_Repository() {
-    git rev-parse --is-inside-work-tree &>/dev/null
+# الدالة المسؤولة عن فحص التواجد بداخل المستودع
+Require_Git_Repository() {
+    local is_repo
+    is_repo=$(git rev-parse --is-inside-work-tree 2>/dev/null)
+    if [[ "$is_repo" != "true" ]]; then
+        echo "You are not inside a Git repository."
+        return 1
+    fi
+    return 0
 }
 
 # الدالة المسؤولة عن إنشاء و تهيئة مستودع جديد
 Create_Repository() {
-    local container
+    local repo_name
 
     read -p "Enter Repository Name: " container
 
-    if [ -z "$container" ]; then
+    if [ -z "$repo_name" ]; then
         echo "Repository name cannot be empty."
         pause
         return 1
     fi
 
-    git init "$container"
-    pause
+    if git init "$repo_name"; then
+        echo "Repository created successfully."
+        pause
+    else
+        echo "Failed to create repository."
+        pause
+        return 1
+    fi
+    
 }
-
-
 
 # الدالة المسؤولة عن إضافة التعديلات التي تم اجرائها بالمستودع
 Add_Change() {
     local comment
-    if ! Is_Git_Repository; then
-    echo "You are not inside a Git repository."
-    return 1
-    fi
+    
     if [ -z "$(git status --porcelain)" ]; then
         echo "No changes to commit."
         return 1
     fi
 
-    while [ -z "$comment" ]
-    do
+    while [ -z "$comment" ]; do
         read -p "Enter Comment or Description : " comment
 
         if [ -z "$comment" ]; then
             echo "Commit message cannot be empty!"
         fi
     done
-
+    
     if git add . && git commit -m "$comment"; then
-     echo "Changes committed successfully."
+        echo "Changes committed successfully."
     else
-     echo "Commit failed."
-     return 1
+        echo "Commit failed."
+        return 1
+    fi
+}
+
+# الدالة المسؤولة عن الحذف التغيرات التي لم يتم اضافتها
+Remove_Change() {
+    local i
+
+    # Check if there are unstaged changes
+    if git diff --quiet; then
+        echo "There are no unstaged changes."
+        return 0
     fi
 
+    echo "WARNING: You have unstaged changes."
+    echo "These changes will be permanently deleted by:"
+    echo "git restore ."
+    echo
+
+    for i in {1..3}
+    do
+        while true
+        do
+            read -p "Confirmation $i/3 - Are you sure? (y/n): " answer
+
+            case "$answer" in
+                y|Y)
+                    break
+                    ;;
+                n|N)
+                    echo "Operation cancelled."
+                    return 0
+                    ;;
+                *)
+                    echo "Invalid input. Please enter y or n."
+                    ;;
+            esac
+        done
+    done
+
+    git restore .
+
+    if [ $? -eq 0 ]; then
+        echo "Unstaged changes deleted successfully."
+    else
+        echo "Failed to delete unstaged changes."
+        return 1
+    fi
 }
 
 # الدالة المسؤولة عن تحديد البرانش الحالي
 Current_Branch() {
     local branch
-    if ! Is_Git_Repository; then
-    echo "You are not inside a Git repository."
-    return 1
-    fi
-
-
     branch=$(git branch --show-current)
 
     if [ -z "$branch" ]; then
@@ -122,6 +159,9 @@ branches=()
 branch_level=() 
 # يوجد 3 دوال تعتمد على هذه المصفوفة
 selected_branch=()
+
+# الدالة المسؤولة عن فحص الإدخالات المتعلقة ببرانش
+
 
 # الدالة المسؤولة عن عرض قائمة 
 Build_Branch_List() {
@@ -196,14 +236,11 @@ Build_Branch_List() {
 # الدالة المسؤولة عن انتقال الى برانش معين
 Switch_Branch() {
     
-    if ! Is_Git_Repository; then
-    echo "You are not inside a Git repository."
-    return 1
-    fi
+    
     
     local choice
     local branch
-    local i
+
 
     echo ""
     echo "========================================"
@@ -224,7 +261,6 @@ Switch_Branch() {
 
     echo "========================================"
     echo ""
-
     read -p "Enter branch number (ENTER to cancel): " choice
 
     if [ -z "$choice" ]
@@ -251,12 +287,7 @@ Switch_Branch() {
 }
 
 # الدالة المسؤولة عن حذف برانش معين 
-Delete_Branch() {
-
-    if ! Is_Git_Repository; then
-    echo "You are not inside a Git repository."
-    return 1
-    fi
+Delete_Branch() {    
 
     local choice
     local branch
@@ -274,7 +305,6 @@ Delete_Branch() {
     
     echo "========================================"
     echo ""
-
     read -p "Enter branch number (ENTER to cancel): " choice
 
     if [ -z "$choice" ]
@@ -312,7 +342,7 @@ Delete_Branch() {
     do
         while true
         do
-            read -p "Are you sure you want to delete '$branch'? (y/n): " confirm
+            read -p "Are you sure you want to delete [Bransh] 'confirm [$i/3]' '$branch'? (y/n): " confirm
 
             if [[ "$confirm" == "y" || "$confirm" == "Y" ]]
             then
@@ -335,10 +365,7 @@ Delete_Branch() {
 
 # الدالة المسؤوبة عن انشاء برانش من كومت معين 
 Create_Branch_From_Commit() {
-    if ! Is_Git_Repository; then
-        echo "You are not inside a Git repository."
-        return 1
-    fi
+    
     local choice
     local commit
     local branch_name
@@ -393,10 +420,11 @@ list_option() {
 	echo "| 2 - Git Identity                       |"
 	echo "| 3 - Show Git Information               |"
 	echo "| 4 - Add Change                         |"
-	echo "| 5 - Show Current Branch                |"
-	echo "| 6 - Switch Branch ( cd Branch )        |"
-	echo "| 7 - Create Branch From Commit          |"
-    echo "| 8 - Delete Branch                      |"
+	echo "| 5 - Remove Change                      |"
+    echo "| 6 - Show Current Branch                |"
+	echo "| 7 - Switch Branch ( cd Branch )        |"
+	echo "| 8 - Create Branch From Commit          |"
+    echo "| 9 - Delete Branch                      |"
 	echo "| 99 - Exit                              |"
 	echo "|========================================|"
 
@@ -411,45 +439,41 @@ list_option() {
 
 # الدالة المسؤولة عن معالجة خيارات و تنفيذ العملية المناسبة 
 press_option() {
-	local option=$1
-	case "$option" in
-	  1)
-       Create_Repository
-      ;;
-	  2)
-	   WhoYou
-	  ;;
-	  3)
-	   Git_Info
-	  ;;
-	  4)
-	   Add_Change
-	   pause
-	  ;;
-	  5)
-	   Current_Branch
-	   pause
-	  ;;
-	  6)
-	   Switch_Branch
-	   pause
-	  ;;
-	  7)
-	   Create_Branch_From_Commit
-	   pause
-	  ;;
-      8)
-       Delete_Branch
-       pause
-      ;;
-	  99)
-	   echo "GoodBye <3 !!!"
-      ;;
-      *)
-       echo "Invalid option."
-       pause
-      ;;
-	esac
+    local option=$1
+    local func
+
+    case "$option" in
+        # الدوال التي لا تحتاج لتحقق من تواجد بداخل المستدوع
+        1) func="Create_Repository" ;;
+        2) func="Set_Git_Identity" ;;
+        3) func="Git_Info" ;;
+
+        # الدوال التي تحتاج لتحقق من تواجد بداخل المستودع
+        4) func="Add_Change" ;;
+        5) func="Remove_Change" ;;
+        6) func="Current_Branch" ;;
+        7) func="Switch_Branch" ;;
+        8) func="Create_Branch_From_Commit" ;;
+        9) func="Delete_Branch" ;;
+
+        # معالجة احتمال ان يدخل المستخدم غير متواجد بالقائمة مثل 50
+        *)
+          echo "Number is not found in list !!!"
+          return 1
+        ;;
+
+    esac
+    # معالجة الخيارات من 1 إلى 3 | لا تحتاج لفحص مستودع
+    if (( option >= 1 && option <= 3 )); then
+        "$func"
+    # معالجة الخيارات من 4 إلى 9 | تحتاج لفحص مستودع
+    elif (( option >= 4 && option <= 9 )); then
+        if Require_Git_Repository; then
+            "$func"
+        fi
+    fi
+    # توقف
+    pause
 }
 
 # الدالة المسؤولة عن تشغيل السكريبت
