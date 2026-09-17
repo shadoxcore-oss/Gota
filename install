@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+
+# ============================================
+# Gota - Installation Script
+# ============================================
+
+SOURCE="gota"
+INSTALL_DIR="$HOME/.local/bin"
+TARGET="$INSTALL_DIR/gota"
+
+# --------------------------------------------
+# Check Gota file
+# --------------------------------------------
+
+if [ ! -f "$SOURCE" ]; then
+    echo "Error: gota file was not found."
+    exit 1
+fi
+
+# Make sure the file is actually named Gota
+if [ "$(basename "$SOURCE")" != "gota" ]; then
+    echo "Error: The file must be named 'gota'."
+    exit 1
+fi
+
+# --------------------------------------------
+# Create installation directory
+# --------------------------------------------
+
+mkdir -p "$INSTALL_DIR" || {
+    echo "Error: Failed to create $INSTALL_DIR"
+    exit 1
+}
+
+# --------------------------------------------
+# Remove old version
+# --------------------------------------------
+
+if [ -f "$TARGET" ]; then
+    echo "Old Gota version found. Removing it..."
+
+    rm "$TARGET" || {
+        echo "Error: Failed to remove old gota."
+        exit 1
+    }
+fi
+
+# --------------------------------------------
+# Install Gota
+# --------------------------------------------
+
+cp "$SOURCE" "$TARGET" || {
+    echo "Error: Failed to copy gota."
+    exit 1
+}
+
+# --------------------------------------------
+# Make Gota executable
+# --------------------------------------------
+
+chmod +x "$TARGET" || {
+    echo "Error: Failed to make Gota executable."
+    exit 1
+}
+
+# --------------------------------------------
+# Add ~/.local/bin to PATH
+# --------------------------------------------
+
+if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+
+    echo "$INSTALL_DIR is not in PATH."
+
+    if ! grep -Fxq 'export PATH="$HOME/.local/bin:$PATH"' "$HOME/.bashrc"; then
+        echo "Adding ~/.local/bin to ~/.bashrc..."
+
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+
+        echo "PATH configuration added successfully."
+    else
+        echo "~/.local/bin is already configured in ~/.bashrc."
+    fi
+
+    # Update PATH for the current shell
+    export PATH="$HOME/.local/bin:$PATH"
+
+else
+    echo "$INSTALL_DIR is already in PATH."
+fi
+
+# --------------------------------------------
+# Installation completed
+# --------------------------------------------
+
+echo ""
+echo "============================================"
+echo "       Gota installed successfully!"
+echo "============================================"
+echo ""
+echo "Location : $TARGET"
+echo "Command  : gota"
+echo ""
+
